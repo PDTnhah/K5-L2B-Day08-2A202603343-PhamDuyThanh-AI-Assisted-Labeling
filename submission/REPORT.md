@@ -19,7 +19,7 @@
   Box bị loại (dưới ngưỡng, hoặc chồng lên box ưu tiên cao hơn): y26_all:person(dưới ngưỡng)×346, y26_all:motorbike(dưới ngưỡng)×106, y26_all:car(dưới ngưỡng)×83, yoloe_all:three_wheeler(dưới ngưỡng)×49, y26_all:bicycle(dưới ngưỡng)×21, y26_all:truck(dưới ngưỡng)×16, y26_all:car×11, y26_all:truck×6, y26_all:motorbike×2, y26_all:bus×2, y26_all:bus(dưới ngưỡng)×2, y26_all:bicycle×1
   ```
   11 box `car` và 6 box `truck` của YOLO26 bị loại vì chồng lên box `three_wheeler` của YOLOE (file đứng trước thắng).
-- **Phiên bản SAM bạn chọn** (SAM 1 / 2.1 / 3) và lý do: <<chất lượng mask, tốc độ, RAM, quyền truy cập>>
+- **Phiên bản SAM bạn chọn** (SAM 1 / 2.1 / 3) và lý do: **SAM 2.1 base** (`sam2.1_b.pt`) cho cả 3 vật. Đây là bản có sẵn trong bộ `core`, đã dùng ở r04; mask liền mạch, bám viền mái và bánh xe tốt. Tôi chạy thêm MobileSAM (`mobile_sam.pt`, SAM 1, nhẹ khoảng 40 MB) trên img_013 với cùng 3 click để so. Kết quả: MobileSAM lại tách người lái tốt hơn, còn SAM 2.1 giữ gần hết người lái trong mask. Như vậy bản lớn hơn không tự hiểu label contract; điều quyết định là đặt đủ click âm. Không dùng SAM 3 vì cần xin quyền tải trên Hugging Face.
 - Lỗi nào **không sửa được bằng đổi ngưỡng** (ví dụ tuk-tuk bị gọi `car`)? Sửa thế nào? Lỗi sai lớp: YOLO26 gọi tuk-tuk là `car` với điểm cao (img_012: 4 tuk-tuk bị gọi car, điểm 0.65–0.81), gọi car là `truck` (img_001, 0.88), xe bán tải bị gọi `truck` (r01) hoặc `three_wheeler` (r03, img_002); tăng ngưỡng lên 0.5 vẫn giữ các box này (r02). Lỗi bỏ sót: person chỉ đạt recall 83% (10/12) và car 88% (7/8) ngay cả ở ngưỡng 0.1, nên hạ ngưỡng cũng không tìm thêm được; xích lô bị cả hai model bỏ sót (img_007). Cách sửa: khi gộp đặt file YOLOE trước để box `three_wheeler` thắng box `car` / `truck` chồng lên (IoU ≥ 0.6), rồi review tay: đổi lớp sai, thêm box bị sót, kiểm tra kỹ `truck` và `three_wheeler`.
 - Box **điểm cao mà sai** hoặc **điểm thấp mà đúng** (ảnh nào): Điểm cao mà sai: img_012 tuk-tuk bị gọi `car` (0.65–0.81); img_001 car bị gọi `truck` (0.88); img_020 box `three_wheeler` 0.86 của YOLOE không khớp vật nào trong gold. Điểm thấp mà đúng: img_036 motorbike 0.12 và 0.22; img_012 three_wheeler 0.19 và 0.24; img_020 car 0.10. Đây là lý do ngưỡng của motorbike (0.1) và three_wheeler (0.15) phải đặt thấp.
 - Giới hạn: chọn ngưỡng trên chính gold (4 ảnh) nên số đo máy trên gold là lạc quan: Ngưỡng được chọn và chấm trên cùng 4 ảnh gold (38 vật) nên precision / recall ở trên là in-sample, sẽ lạc quan hơn trên 24 ảnh batch. Mẫu rất nhỏ: three_wheeler 6 vật, bicycle 1, bus 1, truck 0, nên ngưỡng chỉ là ước lượng thô. Motorbike = 0.1 giữ recall nhưng precision chỉ 35% (17 box thừa trên gold), người review sẽ phải xóa nhiều box.
@@ -74,10 +74,21 @@ Trong deleted + added có 13 trường hợp là đổi lớp (box đúng chỗ,
 
 | Ảnh | SAM (phiên bản) | Số click | Mask gồm người lái / hàng hoá? | Lỗi quan sát | File trong `masks/` |
 |---|---|---|---|---|---|
-| <<img_0xx>> | <<>> | <<>> | <<>> | <<>> | <<>> |
+| img_013 (tuk-tuk có người lái) | SAM 2.1 base | 3 (2 dương: mái 600,110 và thân 400,480; 1 âm: lưng người lái 720,300) | **Có, sai quy tắc**: gồm gần hết người lái (đầu, áo, quần, chân); click âm chỉ khoét được vài đốm quanh nó. Người áo sọc ngồi phía sau, nhìn qua khung hở, cũng bị tô một phần | Vi phạm 4.2.4 (hai vật chạm nhau phải tách riêng). 1 click âm không đủ, cần thêm click âm ở đầu và chân người lái | `tuktuk_img013_sam2.jpg` |
+| img_013 (cùng xe, để so) | MobileSAM (SAM 1) | 3 (cùng click như dòng trên) | **Một phần**: áo và quần người lái đã ra khỏi mask, còn dính mặt và bàn chân / dép | Sàn trước và phần đầu xe màu đỏ có chỗ thủng lốm đốm, mask kém liền mạch hơn SAM 2.1 | `tuktuk_img013_sam1.jpg` |
+| img_004 (tuk-tuk có người đứng sát) | SAM 2.1 base | 3 (2 dương: thân 620,480 và 700,560; 1 âm: chân người áo đen đứng giữa hai xe 465,450) | Không: người áo đen và người đứng bên phải đều nằm ngoài mask; xe không chở hàng | Click dương 700,560 nằm sát mặt đường dưới cản trước, nên mask lấn xuống vùng tối dưới gầm và biên ở đó bị răng cưa (bóng không thuộc vật, 4.2.3). Kính chắn gió nằm trong mask, đúng 4.2.3 | `tuktuk_img004_sam2.jpg` |
+| img_017 (tuk-tuk hông hở) | SAM 2.1 base | 3 (2 dương: ghế 560,420 và thân 680,500; 1 âm: 645,355) | Không có người lái; không chở hàng | Click âm 645,355 rơi trúng mái xe nên không có tác dụng (mái vẫn trong mask). Khoảng hở lớn giữa mái và thân (nhìn thấy cửa hàng phía sau) bị tô kín, không khoét ra, trái 4.2.2. Muốn khoét phải đặt click âm vào chính vùng nền nhìn qua hông xe | `tuktuk_img017_sam2.jpg` |
 
-- Đối chiếu guideline mục 4.2: quy tắc nào giúp, quy tắc nào thiếu? <<>>
-- *(Tuỳ chọn)* Interactor SAM trong CVAT: làm được / không (lỗi gì, đã thử gì); khác gì offline: <<>>
+- Đối chiếu guideline mục 4.2: quy tắc nào giúp, quy tắc nào thiếu?
+  - **Quy tắc giúp được:**
+    - 4.2.4 ("hai vật chạm nhau: mỗi vật một polygon, không chồng") cùng ca khó ở mục 5 ("người là vật riêng") cho biết rõ mask xe không được gồm người lái. Nhờ đó tôi đánh giá được mask img_013 của SAM 2.1 là sai, dù trông gọn.
+    - 4.2.3 (bóng không thuộc vật, kính thuộc vật) giúp chấm img_004.
+  - **Còn thiếu:**
+    1. 4.2.2 nói lỗ lớn thì bỏ ra, nhưng không nói với tuk-tuk hông hở thì cả khoảng giữa mái và thân có tính là "lỗ" không (img_017).
+    2. 4.2.4 nói "vùng chạm thuộc vật ở phía trước", nhưng người lái ngồi *trong* khoang xe thì không rõ ai ở phía trước. Nên ghi thẳng: người luôn được tách khỏi mask xe.
+    3. 4.2.3 nói kính thuộc vật nhưng câu hỏi mở số 5 về kính vẫn chưa chốt, nên hai chỗ chưa nhất quán.
+    4. Không có cách kiểm "lệch biên ≤ 3 px" khi chỉ nhìn ảnh overlay.
+- *(Tuỳ chọn)* Interactor SAM trong CVAT: làm được / không (lỗi gì, đã thử gì); khác gì offline: Không làm (phần tuỳ chọn); chỉ chạy offline bằng `sam2_points.py`.
 
 ## 6. Calibration (Part 6)
 
