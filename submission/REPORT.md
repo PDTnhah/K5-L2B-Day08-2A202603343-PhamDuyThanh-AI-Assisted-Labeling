@@ -1,4 +1,4 @@
-# Báo cáo Day 08 — <<2A202603343 - Phạm Duy Thanh>>
+# Báo cáo Day 08 — 2A202603343 - Phạm Duy Thanh
 
 > Một file duy nhất cho cả bài (đã gộp recipe, QC và ghi chú cá nhân). Mọi con số kèm **mẫu số** và nguồn (file nào). Viết bằng lời của bạn.
 
@@ -9,7 +9,16 @@
 | person / bicycle / motorbike / car / bus / truck | YOLO26m (`yolo26m.pt`) | motorbike = 0.1; person, car, bicycle, bus, truck = 0.3 (mặc định) | r01: bắt chắc person / motorbike / car / bicycle. r02: một ngưỡng chung 0.5 làm số box giảm 215 → 139 nhưng không sửa được lỗi sai lớp, nên chọn ngưỡng theo lớp. Ngưỡng lấy từ `qc/threshold_sweep.md` (nguồn r05): motorbike 0.1 đạt recall 90% (9/10), precision 35% (9/26); person và car không ngưỡng nào ≤ 0.5 đạt 90%; bicycle (1 vật), bus (1), truck (0) quá ít mẫu nên giữ mặc định. |
 | three_wheeler | YOLOE-26s (`yoloe-26s-seg.pt`), prompt: `three_wheeler` | 0.15 | r01, r02: YOLO26 không có lớp này nên bỏ sót tuk-tuk. r03: YOLOE bắt được tuk-tuk (nhưng sót xích lô ở img_007, nhầm xe bán tải ở img_002). Quét ngưỡng (nguồn r06): ở 0.15 recall 100% (6/6), precision 67% (6/9). |
 
-- Lệnh `merge_prelabels.py` đã dùng (dán nguyên): <<>>
+- Lệnh `merge_prelabels.py` đã dùng (dán nguyên):
+  ```
+  python scripts/merge_prelabels.py work/prelabel/yoloe_all/pre.coco.json work/prelabel/y26_all/pre.coco.json --thr "motorbike=0.1,three_wheeler=0.15" --conf 0.3 --iou 0.6 --split "batch,gold" --out work/prelabel/merged_review/pre.coco.json
+  ```
+  Kết quả in ra:
+  ```
+  Gộp 2 file -> 726 box (person=311, motorbike=274, car=65, three_wheeler=52, bicycle=13, truck=7, bus=4) -> work\prelabel\merged_review\pre.coco.json
+  Box bị loại (dưới ngưỡng, hoặc chồng lên box ưu tiên cao hơn): y26_all:person(dưới ngưỡng)×346, y26_all:motorbike(dưới ngưỡng)×106, y26_all:car(dưới ngưỡng)×83, yoloe_all:three_wheeler(dưới ngưỡng)×49, y26_all:bicycle(dưới ngưỡng)×21, y26_all:truck(dưới ngưỡng)×16, y26_all:car×11, y26_all:truck×6, y26_all:motorbike×2, y26_all:bus×2, y26_all:bus(dưới ngưỡng)×2, y26_all:bicycle×1
+  ```
+  11 box `car` và 6 box `truck` của YOLO26 bị loại vì chồng lên box `three_wheeler` của YOLOE (file đứng trước thắng).
 - **Phiên bản SAM bạn chọn** (SAM 1 / 2.1 / 3) và lý do: <<chất lượng mask, tốc độ, RAM, quyền truy cập>>
 - Lỗi nào **không sửa được bằng đổi ngưỡng** (ví dụ tuk-tuk bị gọi `car`)? Sửa thế nào? Lỗi sai lớp: YOLO26 gọi tuk-tuk là `car` với điểm cao (img_012: 4 tuk-tuk bị gọi car, điểm 0.65–0.81), gọi car là `truck` (img_001, 0.88), xe bán tải bị gọi `truck` (r01) hoặc `three_wheeler` (r03, img_002); tăng ngưỡng lên 0.5 vẫn giữ các box này (r02). Lỗi bỏ sót: person chỉ đạt recall 83% (10/12) và car 88% (7/8) ngay cả ở ngưỡng 0.1, nên hạ ngưỡng cũng không tìm thêm được; xích lô bị cả hai model bỏ sót (img_007). Cách sửa: khi gộp đặt file YOLOE trước để box `three_wheeler` thắng box `car` / `truck` chồng lên (IoU ≥ 0.6), rồi review tay: đổi lớp sai, thêm box bị sót, kiểm tra kỹ `truck` và `three_wheeler`.
 - Box **điểm cao mà sai** hoặc **điểm thấp mà đúng** (ảnh nào): Điểm cao mà sai: img_012 tuk-tuk bị gọi `car` (0.65–0.81); img_001 car bị gọi `truck` (0.88); img_020 box `three_wheeler` 0.86 của YOLOE không khớp vật nào trong gold. Điểm thấp mà đúng: img_036 motorbike 0.12 và 0.22; img_012 three_wheeler 0.19 và 0.24; img_020 car 0.10. Đây là lý do ngưỡng của motorbike (0.1) và three_wheeler (0.15) phải đặt thấp.
@@ -17,29 +26,49 @@
 
 ## 2. AI error profile (từ `qc/review_stats.md`)
 
+24 ảnh batch; đã loại 25 đối tượng nằm quanh 12 bẫy (lỗi nhân tạo, không phải lỗi máy).
+
 | Trạng thái | Số | Tỉ lệ | Mẫu số |
 |---|---|---|---|
-| accepted | <<>> | <<>> | <<box máy>> |
-| edited | <<>> | <<>> | <<>> |
-| deleted | <<>> | <<>> | <<>> |
-| added | <<>> | <<>> | <<đối tượng sau duyệt>> |
+| accepted | 544 | 544/621 = 87.6% | 621 box máy |
+| edited | 15 | 15/621 = 2.4% | 621 box máy |
+| deleted | 62 | 62/621 = 10.0% | 621 box máy |
+| added | 25 | 25/584 = 4.3% | 584 đối tượng sau duyệt |
 
-- Lớp nào máy tệ nhất? Vì sao (dẫn ảnh)? <<>>
-- So với gold: precision / recall của **máy** <<>> (mẫu số: <<đối tượng gold>>)
+Trong deleted + added có 13 trường hợp là đổi lớp (box đúng chỗ, sai lớp), nên số vật máy bỏ sót thật khoảng 25 − 13 = 12.
+
+- Lớp nào máy tệ nhất? Vì sao (dẫn ảnh)?
+  - **three_wheeler** tệ nhất: 41 box máy, chỉ giữ nguyên 10/41 = 24%, xoá 24/41 = 59%, sửa 7. Box bị xoá tập trung ở img_003 (7 box), img_013 (3), img_014 (3). Trong số đổi lớp, 3 box `three_wheeler` thực ra là `truck` và 3 box là `bus`: YOLOE gọi cả xe tải, xe buýt là xe ba bánh, và ngưỡng 0.15 thấp nên giữ thêm nhiều box ma.
+  - **truck** cũng kém: 6 box máy, giữ 1/6, xoá 5 (img_013: 2, img_024: 3); 2 box là `bus`, 1 box là `car`.
+  - **bus**: máy giữ đúng cả 3 box nó vẽ, nhưng tôi phải thêm 5 box bus (img_013: 3, img_018: 1, img_024: 1), chủ yếu do máy gọi xe buýt là `three_wheeler` / `truck` / `car`.
+  - Ngược lại, các lớp COCO quen thuộc làm tốt: person giữ 259/267 = 97%, motorbike 217/242 = 90%, car 48/54 = 89%.
+- So với gold: precision / recall của **máy** = 43.6% (34/78 box máy, KTC 95% 33–55%) / 89.5% (34/38, KTC 95% 76–96%) (mẫu số: 38 đối tượng gold trên 4 ảnh). 44 box thừa chủ yếu là person (19) và motorbike (17) ở img_001 và img_036; 21/44 box thừa có cạnh ngắn dưới 20 px (người, xe ở rất xa mà gold không vẽ). 4 vật bị sót: car (img_001), person (img_020), motorbike và person (img_036). Số này lạc quan vì ngưỡng được chọn trên chính 4 ảnh gold.
 
 ## 3. Thiên kiến tự động hóa và ảnh bẫy
 
-- Bắt bẫy: <<.../12>>; loại nào lọt: <<>>; vì sao (bạn đã bỏ bước nào của checklist)? <<>>
-- Accepted cao mà bắt bẫy thấp (hoặc ngược lại) nói gì về cách bạn duyệt? <<>>
+- Bắt bẫy:
+  - **Lần duyệt đầu: 8/12 = 66.7%**, dưới mức 80%. Lọt 4 bẫy: 2 `missing` (img_021, img_024), 1 `loose` (img_029), 1 `wrong_class` (img_005).
+  - Sau khi export, tôi mở `traps_key.json` để biết ảnh nào lọt, sửa lại rồi export lần 2: **11/12 = 91.7%** (KTC 95% 65–99%, nguồn `qc/review_stats.md`). Vì lần 2 đã nhìn đáp án nên con số phản ánh đúng khả năng duyệt của tôi là 8/12.
+  - Bẫy vẫn lọt ở lần 2 là img_024 (`missing` person). Tôi đã vẽ box person nhưng chỉ ôm phần thân trên (y 490–534, trong khi box gốc là y 488–567), IoU với box gốc là 0.49 < 0.5 nên script chấm là lọt.
+  - Vì sao lọt: cả 4 bẫy lọt ở lần đầu đều nằm trong 6 ảnh xe máy dày (005, 018, 021, 024, 028, 029). Ở các ảnh đông, tôi bỏ bước 0 (ẩn nhãn, quét và đếm trước) nên không thấy người chưa có box (img_021, img_024). Tôi cũng không kiểm 4 cạnh nên giữ nguyên box lệch (img_029). Ở img_005, tôi thấy nhãn `bicycle` sai nhưng đổi thành `motorbike` thay vì `person`, tức là sửa nhãn mà không nhìn kỹ vật trong box.
+  - Tôi cũng không dùng `ignore_region` nào trong batch (0 vùng, trong khi gold có 12 vùng) và vẫn giữ 16 box cao dưới 20 px (11 motorbike, 7 box ở img_018).
+- Accepted cao mà bắt bẫy thấp nói gì về cách bạn duyệt?
+  - Accepted 87.6% (544/621) cao, nhưng lần đầu tôi chỉ bắt được 66.7% bẫy. Vậy accepted cao không chứng minh máy tốt: một phần box được giữ vì tôi lướt qua, không phải vì tôi đã kiểm.
+  - Dấu hiệu thứ hai: trên gold, 44/78 box máy (56%) là sai so với nhãn tôi gán tay, nhưng ở batch tôi chỉ xoá 62/621 (10%). Hai bộ ảnh khác nhau và gold chỉ có 4 ảnh nên không so trực tiếp được, nhưng khoảng chênh lớn cho thấy tôi dễ làm theo máy, nhất là với box nhỏ ở xa.
+  - `added` thấp (4.3%) cũng không có nghĩa máy ít sót: 2/3 bẫy `missing` tôi đã không thấy ở lần đầu.
 
 ## 4. Máy có đáng dùng không?
 
-- Thời gian (từ `time_log.csv`): gán tay <<... phút/ảnh>> vs duyệt <<... phút/ảnh>>. Thiên lệch (bạn gán gold trước nên đã quen cảnh): <<>>
-- Kết luận: <<có / không / chỉ cho lớp nào>>, dựa trên <<số liệu>>
+- Thời gian (từ `time_log.csv`):
+  - Gán tay 10 phút / 4 ảnh = **2.5 phút/ảnh**, tức khoảng 16 giây/vật (38 vật).
+  - Duyệt 100 phút / 24 ảnh = **4.2 phút/ảnh**, tức khoảng 10 giây/vật (584 vật).
+  - Tính theo ảnh thì duyệt chậm hơn, vì ảnh batch đông hơn nhiều (khoảng 24 vật/ảnh so với 9.5 vật/ảnh ở gold). Tính theo vật thì duyệt nhanh hơn khoảng 35%.
+  - Thiên lệch: tôi gán gold trước nên khi duyệt đã quen kiểu cảnh và quen CVAT, nên thời gian duyệt có lợi một phần nhờ quen tay. Ngược lại, 4 ảnh gold ít vật và tôi gom vật nhỏ vào 12 `ignore_region`, nên thời gian gán tay cũng thấp hơn so với gán tay ảnh đông.
+- Kết luận: **có, nhưng chỉ cho person, motorbike, car**. Ba lớp này giữ nguyên 97% (259/267), 90% (217/242), 89% (48/54) box máy, và tính theo vật thì duyệt nhanh hơn gán tay (khoảng 10 giây so với 16 giây). **Không đáng dùng cho three_wheeler** (giữ 24% = 10/41, xoá 59%) **và truck** (giữ 1/6): máy tạo nhiều box sai hơn box đúng. Lần sau, với hai lớp này tôi sẽ tăng ngưỡng `three_wheeler` hoặc vẽ tay tuk-tuk, xe tải, xe buýt.
 - **Ba quy tắc giảm thiên kiến của bạn** (mỗi quy tắc kiểm tra được bằng số hoặc việc làm):
-  1. <<>>
-  2. <<>>
-  3. <<>>
+  1. Ở 100% ảnh, ẩn nhãn máy và đếm số người theo 4 góc phần tư trước khi hiện nhãn, ghi số đếm vào ghi chú; sau khi duyệt, số box person của ảnh phải khớp số đếm ±1 (kiểm: có số đếm cho 24/24 ảnh).
+  2. Duyệt 6 ảnh xe máy dày ngay đầu phiên hoặc ngay sau giờ nghỉ, và nghỉ 5 phút sau mỗi 8 ảnh (kiểm: `time_log.csv` có ít nhất 2 dòng `break`), vì 4/4 bẫy lọt lần đầu đều nằm trong 6 ảnh này.
+  3. Trước khi export, dùng Filters xem lại 100% box của `three_wheeler`, `truck`, `bus`, `bicycle` (4 lớp máy sai nhiều nhất) và gom mọi vật cao dưới 20 px vào `ignore_region` (kiểm: `validate_labels.py` không còn cảnh báo box < 20 px).
 
 ## 5. Mask SAM cho 3 vật (Part 5)
 
