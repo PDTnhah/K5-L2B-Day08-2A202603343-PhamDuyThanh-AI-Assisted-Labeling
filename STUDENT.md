@@ -5,7 +5,7 @@
 - Lớp (L2 / L3 / khác): L2B
 - Tài khoản GitHub: PDTnhah
 - Repo bài nộp (URL): https://github.com/PDTnhah/K5-L2B-Day08-2A202603343-PhamDuyThanh-AI-Assisted-Labeling
-- Commit chốt bài (hash): <<>>
+- Commit chốt bài (hash): ecb60127539218b44861d3cdf9bbea4fda9c3982
 - Máy: Windows 11, không dùng GPU, Pha 5 chạy trên Colab GPU T4
 - CVAT (Docker): 2.74.0
 
