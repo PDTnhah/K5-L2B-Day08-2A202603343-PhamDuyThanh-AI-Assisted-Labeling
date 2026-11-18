@@ -92,26 +92,52 @@ Trong deleted + added có 13 trường hợp là đổi lớp (box đúng chỗ,
 
 ## 6. Calibration (Part 6)
 
-- Số quyết định: <<>> (`calibration_decisions.csv`); quan trọng nhất (dẫn `CAL-xx`): <<>>
-- Quy tắc mới đã vào `guideline_v1.1_calibrated.md`: <<>>
-- Nguyên nhân gốc: <<guideline mơ hồ / chưa nắm quy tắc / máy>>
+- Số quyết định: **9** (`calibration_decisions.csv`): 5 ca `loi_may`, 3 ca `cau_hoi_mo`, 1 ca `bay_lot`. Quan trọng nhất:
+  - **CAL-01**: lỗi máy lớn nhất. YOLOE gọi xe tải, xe buýt là `three_wheeler`, nên tôi phải xoá 24/41 box `three_wheeler`.
+  - **CAL-03**: chỗ v1.0 thật sự mơ hồ. `car` gồm "minivan" nhưng `bus` gồm "minibus", nên xe van chở khách ở img_013 và img_024 không biết gán lớp nào.
+- Quy tắc mới đã vào `guideline_v1.1_calibrated.md`:
+  1. Dấu hiệu nhận biết `three_wheeler`: đếm bánh (CAL-01).
+  2. Van chở khách thân hộp, từ 3 hàng ghế → `bus`; minivan gia đình → `car` (CAL-03).
+  3. Xe máy đỗ dày gần camera vẫn gán từng xe; chỉ gom `ignore_region` cho cụm xe cao dưới 20 px (câu 2, CAL-04).
+  4. Kính xe thuộc xe (câu 5, CAL-05).
+  5. Không đặt ngưỡng `conf` để tự chấp nhận box (câu 7, CAL-06).
+  6. Người trong xe luôn là polygon riêng (mục 4.2.4, CAL-07).
+  7. Khung xe hở tính là lỗ của mask (mục 4.2.2, CAL-08).
+
+  Câu hỏi mở 1, 3, 4, 6 chưa chốt vì chưa gặp ca rõ ràng trong lô.
+- Nguyên nhân gốc:
+  - **Guideline mơ hồ**: 6 ca (CAL-03 → CAL-08).
+  - **Máy sai**: 2 ca (CAL-01, CAL-02). Guideline đã đủ rõ, chỉ thêm dấu hiệu nhận biết và ảnh ví dụ.
+  - **Người duyệt chưa áp quy tắc**: 1 ca (CAL-09, bẫy img_024). Tương tự là 16 box cao dưới 20 px tôi vẫn giữ dù mục 4.1.6 đã cấm.
 
 ## 7. QC và quyết định (Part 6)
 
-- Mẫu: <<n>> ảnh (<<m>> ảnh `can_review` + <<k>> ngẫu nhiên, seed 42); người kiểm: bạn (**hạn chế**: bạn vừa là người duyệt).
-- Lỗi theo **đối tượng**: <<.../... = ...%>> · theo **ảnh**: <<.../... = ...%>> (ngưỡng Release ≤ 2%)
-- Top lỗi (trong: bỏ sót, thừa, sai lớp, sai vị trí/kích thước, sai thuộc tính, sai mask) + một ảnh ví dụ mỗi loại: <<>>
-- **Giới hạn mẫu nhỏ** (cận trên 95% trong `qc_report_auto.md`): <<>>
-- Script kiểm được / không kiểm được (ví dụ ôm sát, cùng bỏ sót với máy, theo checklist thật): <<>>
+- Mẫu: **5** ảnh (**0** ảnh `can_review` + **5** ngẫu nhiên, seed 42): img_003, img_006, img_014, img_031, img_035, tổng 113 đối tượng. Người kiểm: tôi (**hạn chế**: tôi vừa là người duyệt). Mẫu không có ca khó vì lúc duyệt tôi không tick `can_review` box nào.
+- Lỗi theo **đối tượng**: 0/113 = 0.0% · theo **ảnh**: 0/5 = 0.0% (ngưỡng Release ≤ 2%). Nguồn: `qc_review.csv`, `qc_report_auto.md`.
+- Top lỗi:
+  - **Trong mẫu**: không ghi nhận lỗi nào.
+  - **Ngoài mẫu**, đã biết từ Pha 4 (đếm từ `batch_reviewed.json`):
+    - **thừa**: 16 box cao dưới 20 px, trái mục 4.1.6, nằm ở 6 ảnh: img_018 (7 box), img_027 (3), img_033 (2), img_034 (2), img_023 (1), img_025 (1). Gồm 11 motorbike, 2 person, 2 car, 1 bicycle.
+    - **sai vị trí/kích thước**: img_024 có box person chỉ ôm nửa người (y 490–534 so với vật thật y 488–567).
+- **Giới hạn mẫu nhỏ**:
+  - Theo ảnh: 0/5 ảnh lỗi, nhưng cận trên Wilson 95% của tỉ lệ ảnh lỗi thật là **43%** (`qc_report_auto.md`).
+  - Theo đối tượng: 0/113, cận trên khoảng 3%. Cả hai đều chưa chứng minh được ngưỡng 2%.
+  - Bằng chứng cụ thể: 7/24 ảnh có lỗi đã biết, nhưng không ảnh nào rơi vào mẫu 5 ảnh. Mẫu nhỏ chỉ phát hiện được lỗi lớn và phổ biến, không chứng minh được lô sạch.
+- Script kiểm được / không kiểm được:
+  - **Kiểm được**: định dạng file, lớp có trong taxonomy, đủ 24 ảnh, box nằm trong ảnh, cảnh báo box cao dưới 20 px (`validate_labels.py`), accepted / edited / deleted / added, tỉ lệ bắt bẫy, tỉ lệ lỗi tính từ phiếu QC.
+  - **Không kiểm được**: box có ôm sát vật thật không; lớp có đúng thực tế không; vật mà cả tôi lẫn máy cùng bỏ sót (ngoài 4 ảnh gold); tôi có làm bước 0 của checklist thật không. Phiếu QC cũng chỉ là mắt của chính người đã duyệt.
 
-**Quyết định: <<Release / Hold / Rework>>**, ngày <<YYYY-MM-DD>>. Lý do (đi theo Hold → Rework → Release): <<>>
-Nếu Rework / Hold, việc cần làm tiếp: <<>>
+**Quyết định: Rework**, ngày 2026-11-17. Lý do (đi theo Hold → Rework → Release):
+- **Không Hold**: không có ảnh hỏng, và các câu hỏi mở chưa chốt đều chưa gặp trong lô (`--guideline-gap 0`).
+- **Rework**:
+  - Chỉ xét mẫu 5 ảnh thì script gợi ý Release (0/5 ảnh lỗi, bắt bẫy 11/12). Nhưng tôi biết lô còn **lỗi lặp cùng loại** nằm ngoài mẫu: 16 box `thua` cao dưới 20 px, cộng 1 box sai kích thước ở img_024. Tổng là ít nhất 7/24 ảnh có lỗi (29%), vượt xa ngưỡng 2%.
+  - Ở lần duyệt độc lập (trước khi xem đáp án), tôi chỉ bắt được 8/12 = 66.7% bẫy, dưới 80%.
+  - Báo Release khi đã biết các lỗi này là không trung thực.
+
+Việc cần làm tiếp:
+1. Trên Task `batch-review`, xoá 16 box cao dưới 20 px ở img_018, img_027, img_033, img_034, img_023, img_025. Cụm từ 5 xe nhỏ sát nhau thì gom thành một `ignore_region` (mục 4.1.6, CAL-04).
+2. Ở img_024, kéo box person ôm hết người (đến khoảng y 567).
+3. Duyệt lại 6 ảnh xe máy dày (005, 018, 021, 024, 028, 029) theo bước 0: ẩn nhãn, đếm theo góc phần tư. Lý do: 4/4 bẫy lọt ở lần đầu đều nằm trong nhóm này. Tick `can_review` cho các ca biên.
+4. Export các ảnh đã sửa thành `submission/labels/qc_fixed.json`, chạy lại `build_release.py`, rồi `qc_sample.py --force` để rút mẫu vòng 2 (có thêm ảnh `can_review`), điền phiếu, chạy `qc_report.py`, ghi kết quả vòng 2 vào báo cáo.
 
 ## 8. Ghi chú cá nhân
-
-- **Dùng AI để làm bài** (công cụ nào, việc gì, kiểm tra thế nào; "không dùng" nếu không): <<>>
-- Gold có bị nhiễm không (bạn có nhìn pre-label hay hỏi AI trước khi gán xong)? <<không / có, như sau: ...>>
-- Máy / GPU / CVAT dùng; vướng mắc cài đặt: <<>>
-- Dùng cache `data/cache/` thay vì tự chạy? <<không / có, vì ...>>
-- Lỗi / bug script đã gặp (nếu có): <<>>
-- Một điều bạn làm khác lần sau: <<>>
